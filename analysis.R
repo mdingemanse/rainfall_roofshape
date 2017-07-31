@@ -28,7 +28,7 @@ add_working_dir("in")
 add_working_dir("out")
 
 # Packages and useful functions
-list.of.packages <- c("ggplot2","ggthemes","dplyr","lme4","extremevalues","mapproj","sp","rgeos")
+list.of.packages <- c("ggplot2","tidyr","dplyr","ggthemes","lme4","extremevalues","mapproj","sp","rgeos")
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)>0) install.packages(new.packages)
 lapply(list.of.packages, require, character.only=T)
@@ -72,6 +72,8 @@ names(d)[names(d)=="Variable..Monthly.Mean.Precipitation..mm."] <- "rainfall"
 names(d)[names(d)=="Code..EA087.House.construction..secondary.house.type...shape.of.roof"] <- "roofcode.secondary"
 names(d)[names(d)=="Revised.longitude"] <- "longitude"
 names(d)[names(d)=="Revised.latitude"] <- "latitude"
+names(d)[names(d)=="References..EA082.House.construction..shape.of.roof"] <- "references"
+names(d)[names(d)=="Region.name"] <- "region"
 
 # What's the mapping exactly?
 code <- unique(d$roofcode)
@@ -164,53 +166,51 @@ top3 <- d.no %>%
 
 # Mapping
 
-m <- ggplot(d.no,aes(longitude,latitude)) + 
+ggplot(d.no,aes(longitude,latitude)) + 
   theme_map() +
   borders("world", colour=NA, fill="#e7e8ea") +
   geom_point(data=filter(d.no,flatroof==0),aes(fill=rainfall,colour=flatroof),size=3,shape=21,stroke=1,alpha=0.7) +
   geom_point(data=filter(d.no,flatroof==1),aes(fill=rainfall,colour=flatroof),size=3,shape=22,stroke=1,alpha=0.7) +
-  scale_colour_manual(values = c(NA,"brown"), guide = FALSE) +
+  scale_colour_manual(values = c("#fffff","brown"), guide = FALSE) +
   scale_fill_gradient("rainfall", low="#5edcff", high="#035280")
-plot(m)
 ggsave(file="out/map-rainfall-by-rooftype.png", width=12,height=8)
 
 # map highest
-m + geom_point(data=top3,aes(longitude,latitude),fill="red",colour=NA,size=3,shape=22,stroke=1)
+last_plot() + geom_point(data=top3,aes(longitude,latitude),fill="red",colour="red",size=3,shape=22,stroke=1)
 ggsave(file="out/map-rainfall-by-rooftype-highest.png", width=12,height=8)
 
 # zoom in on West-Africa
-m + theme_bw() # use to target desired lat/long for zooming
+last_plot() + theme_bw() # use to target desired lat/long for zooming
 
-zoom1 <- m + borders(colour="white") + coord_map(xlim = c(-18,7), ylim = c(20,2))
+zoom1 <- last_plot() + borders(colour="white") + coord_map(xlim = c(-18,7), ylim = c(20,2))
 
-zoom1 + geom_point(data=top3,aes(longitude,latitude),fill="red",colour=NA,size=3,shape=22,stroke=1)
+zoom1 + geom_point(data=top3,aes(longitude,latitude),fill="red",colour="red",size=3,shape=22,stroke=1)
 ggsave(file="out/map-rainfall-by-rooftype-west-africa.png", width=12,height=8)
 
 
 # Plotting
-myseed=101
+myseed=100
 set.seed(myseed)
-p <- ggplot(d.no, aes(x=flatroof,y=rainfall,fill=rainfall,na.rm=T)) +
+ggplot(d.no, aes(x=flatroof,y=rainfall,fill=rainfall,colour=rainfall)) +
   theme_bw() +
-  geom_jitter(alpha=0.7,shape=21,width=0.5,colour=NA,size=2,stroke=1) +
+  geom_jitter(alpha=0.7,shape=21,width=0.5,size=2,stroke=1) +
   scale_fill_gradient("rainfall", low="#5edcff", high="#035280") +
-  stat_summary(fun.y = "mean", fun.ymin = "mean", fun.ymax= "mean", size=0.3,width=0.33, geom = "crossbar")
-plot(p)
+  scale_colour_gradient("rainfall", low="#5edcff", high="#035280") +
+  stat_summary(fun.y = "median", fun.ymin = "median", fun.ymax= "median", size=0.3,width=0.33, geom = "crossbar")
 ggsave(file="out/rainfall-by-rooftype.png", width=3,height=5)
 
-# Highlight highest 5
+# Highlight highest 3
 d.no$top3 <- ifelse(d.no$Preferred.society.name %in% top3$Preferred.society.name, 1, NA)
 d.no$top3 <- as.factor(d.no$top3)
 
 set.seed(myseed)
-pm <- ggplot(d.no, aes(x=flatroof,y=rainfall,fill=rainfall,colour=top3)) +
+ggplot(d.no, aes(x=flatroof,y=rainfall,fill=top3,colour=rainfall)) +
   theme_bw() +
-  geom_jitter(alpha=0.7,width=0.5,shape=21,size=2,stroke=1) +
-  scale_fill_gradient("rainfall", low="#5edcff", high="#035280") +
-  scale_colour_manual(values=c("red",NA), guide = FALSE) +
-  stat_summary(aes(x=flatroof,y=rainfall,fill=rainfall), inherit.aes = FALSE, fun.y = "mean", fun.ymin = "mean", fun.ymax= "mean", size=0.3,width=0.33, geom = "crossbar")
-plot(pm)
-ggsave(file="out/rainfall-by-rooftype-top3.png", width=3,height=5)
+  geom_jitter(alpha=0.7,shape=21,width=0.5,size=2,stroke=1) +
+  scale_colour_gradient("rainfall", low="#5edcff", high="#035280") +
+  scale_fill_manual(values=c("red"), guide = FALSE) +
+  stat_summary(aes(x=flatroof,y=rainfall),inherit.aes=F,fun.y = "median", fun.ymin = "median", fun.ymax= "median", size=0.3,width=0.33, geom = "crossbar")
+ ggsave(file="out/rainfall-by-rooftype-top3.png", width=3,height=5)
 
 
 # Linear modelling --------------------------------------------------------------
