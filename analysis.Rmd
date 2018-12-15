@@ -248,5 +248,40 @@ comparison
 comparison[1,4]-comparison[2,4] # log likelihood difference
 ```
 
+# Botero (2014) Nearest-neighbour approach
+
+Here is an approach implmented first in 'The ecology of religious beliefs' by Carlos Botero et. al. This approach includes language family as a random effect and estimates the potential effects of spatial proximity.
+
+The original formulation of this approach includes the average socre among the N nearest neighbors for a given observation as a covariate in the model. However, since we are using a global sample, taking the nearest neighbours is contingent on distance. So here we alter this approach to take the nearest neighbours within a certain distance - in this case 1000km.
+
+```{r, message=FALSE, warning=FALSE}
+source('in/MuMAC.09Sep14_distance.R')
+
+d$flatroof = d$flatroof %>% 
+  as.character(.) %>% 
+  as.numeric(.)
+
+mydata = d
+response = "flatroof"
+Predictors = "rainfall"
+VerticalDependency = "Language.family"
+Nneighbors = 1000
+
+fit = MuMAC(mydata = d, 
+            response = "flatroof", 
+            Predictors = "rainfall", 
+            VerticalDependency = "Language.family", 
+            Nneighbors = 500)
+fit
+```
+
+
+
+
+
 # Conclusions
 In this dataset, rainfall is a strong predictor of roof shape, controlling for language family and region. Flat roofs are unlikely to occur in locales with a lot of precipitation. So the hypothesis is supported: rainfall selects against flat roots.
+
+## References
+
+Botero, C. A., Gardner, B., Kirby, K. R., Bulbulia, J., Gavin, M. C., & Gray, R. D. (2014). The ecology of religious beliefs. Proceedings of the National Academy of Sciences, 111(47), 16784–16789. https://doi.org/10.1073/pnas.1408701111
