@@ -5,7 +5,7 @@
 # 12 Aug 2014 (C)
 
 ####################################################
-MuMAC <- function(mydata, response, Predictors, VerticalDependency = 'VerticalDependency',
+MuMAC_distance <- function(mydata, response, Predictors, VerticalDependency = 'VerticalDependency',
                   test=F, mySeed = runif(1)*1E5, Nneighbors = 10) {
   require(nlme)
   require(lme4)
