@@ -62,8 +62,8 @@ MuMAC_distance <- function(mydata, response, Predictors, VerticalDependency = 'V
     nebs = apply(xys, 1, function(r) which(r < distance & r > 0))
     neighbours_score = lapply(nebs, function(n) mean(myDependent[n])) %>% 
       unlist(.)
-    # assume if no neighbours are within distance, then 0
-    neighbours_score = ifelse(is.nan(neighbours_score), 0 , neighbours_score)
+    # assume if no neighbours are within distance, then 0.5 since we can't make a decision
+    neighbours_score = ifelse(is.nan(neighbours_score), 0.5 , neighbours_score)
     
     N <- dim(mydata)[1]  #number of observations
     # adjIDs=array(NA, dim=c(N,max(NumNeigh)))
