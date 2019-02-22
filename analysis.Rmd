@@ -8,6 +8,15 @@ output:
     toc_float: yes
 ---
 
+```{r}
+library(knitr)
+library(kableExtra)
+
+source('in/MuMAC.09Sep14.R')
+source('in/MuMAC.09Sep14_distance.R')
+```
+
+
 # Objectives
 
 1. Play with the new D-PLACE database 
@@ -18,7 +27,6 @@ output:
 Clear workspace, check for /in/ and /out/ directories (create them if needed), and load packages (install them if needed)
 
 ```{r preliminaries, results="hide"}
-rm(list=ls())
 add_working_dir <- function(x) { if(file.exists(x)) { cat(x,"dir:",paste0(getwd(),"/",x,"/")) } else { dir.create(paste0(getwd(),"/",x)) 
   cat("subdirectory",x,"created in",getwd()) } }
 add_working_dir("in")
@@ -46,7 +54,7 @@ Load and pre-process D-PLACE data. Here's a [direct link](https://d-place.org/so
 ```{r data}
 # Load data (skipping line 1, which is a note about attribution)
 
-d <- read.csv(file="in/dplace-export.csv",skip=1)
+d <- read.csv(file="in/dplace-export.csv",skip=1, stringsAsFactors = FALSE)
 
 # Rename unwieldy variable names
 names(d)[names(d)=="Description..EA082.House.construction..shape.of.roof"] <- "roofdesc"
@@ -248,5 +256,104 @@ comparison
 comparison[1,4]-comparison[2,4] # log likelihood difference
 ```
 
+# Botero (2014) Nearest-neighbour approach
+
+Here is an approach implmented first in 'The ecology of religious beliefs' by Carlos Botero and colleagues. This approach includes language family as a random effect (as in the model above) and estimates the effect of spatial proximity by using the average response value of N nearest neighbours as a predictor variable. The logic being if something is transmitted horizontally, neighbours have similar trait values and this will predict a particular societies value. 
+
+First, we will look at the NN approach - however, since we are using a global sample, neighbours are not always of the same distance, meaning the definition of horiztonal influence varies (e.g. Rapanui's nearest 5 neighbours will be very different to a PNG society). So, secondly we alter this approach to take the nearest neighbours within a certain distance. This approach will be called closest neighbours. 
+
+Latitude and Longitude variables are used to calculate nearest & closest neighbours. 
+
+## Nearest neighbour
+
+The default value of this approach is to use `NN = 10` which we have used here. The model here is effectively, `flatroof ~ rainfall + NN Score + (1|Language Family)`
+
+```{r, message=FALSE, warning=FALSE}
+d$flatroof = d$flatroof %>% 
+  as.character(.) %>% 
+  as.numeric(.)
+
+mydata = d
+response = "flatroof"
+Predictors = "rainfall"
+VerticalDependency = "Language.family"
+Nneighbors = 1000
+
+fit = MuMAC(mydata = d, 
+            response = "flatroof", 
+            Predictors = "rainfall", 
+            VerticalDependency = "Language.family", 
+            Nneighbors = 10)
+#fit
+
+kable(fit$ModWeights, format = 'html', digits = 3) %>% 
+  kable_styling()
+kable(fit$MM_average, format = 'html', digits = 3) %>% 
+  kable_styling()
+```
+
+This approach fits all possible models, and compares them based on AICc values. The first table here shows the delta AICc and AICc weight of each model. The second table shows the beta estimates for each variable in the model and the Relative Variable Importance (RVI). RVI is calculated using the presence of variables in the better fitting models - i.e. if a variable is often in the better fitting models, then it has high RVI. Predictive accuracy is another output from this model, but it hasn't been utilised here so is empty. These outputs are the same for the closest neighbours output. 
+
+Using the default NN value, we see the best model is one only using the Nearest neighbour score. Neighbour score also has an RVI of one. (The intercept has to be in every model). This contradicts the ideas above. 
+
+```{r}
+fit = MuMAC(mydata = d, 
+            response = "flatroof", 
+            Predictors = "rainfall", 
+            VerticalDependency = "Language.family", 
+            Nneighbors = 20)
+#fit
+
+kable(fit$ModWeights, format = 'html', digits = 3) %>% 
+  kable_styling()
+kable(fit$MM_average, format = 'html', digits = 3) %>% 
+  kable_styling()
+```
+
+Using double the number of Neighbours, we see the importance of Vertical dependency increases to a much higher level. This is perhaps because NN scores now spans across language families. Rainfall however, remains relatively unimportant. The most important model now is one including NeighbourScore and the Language family random effect. 
+
+## Closest neighbours
+
+Here, I have altered the approach slightly to take the average of neighbours within a certain distance. _This is currently a small hack in the code which mean `Nneighbours` now represents distance rather than number of neighbours_. Currently I am just guesstimating the best distance, so a more methodological approach to choosing distance might be appropriate. I will start with neighbours within 1000kms. 
+
+```{r, message=FALSE, warning=FALSE}
+fit = MuMAC_distance(mydata = d, 
+            response = "flatroof", 
+            Predictors = "rainfall", 
+            VerticalDependency = "Language.family", 
+            Nneighbors = 1000) 
+# Nneighbours now takes a distance value for neighbours to be within
+
+kable(fit$ModWeights, format = 'html', digits = 3) %>% 
+  kable_styling()
+kable(fit$MM_average, format = 'html', digits = 3) %>% 
+  kable_styling()
+```
+
+When we run this approach all predictors are of basically equal importance, and therefore are all included in the best model.
+
+If we reduce the NN distance to 500km
+
+```{r, message=FALSE, warning=FALSE}
+fit = MuMAC_distance(mydata = d, 
+            response = "flatroof", 
+            Predictors = "rainfall", 
+            VerticalDependency = "Language.family", 
+            Nneighbors = 500) 
+# Nneighbours now takes a distance value for neighbours to be within
+
+kable(fit$ModWeights, format = 'html', digits = 3) %>% 
+  kable_styling()
+kable(fit$MM_average, format = 'html', digits = 3) %>% 
+  kable_styling()
+```
+
+What is not clear is how good this model is to the Nearest neighbour models. This will need further investigating. 
+
+
 # Conclusions
 In this dataset, rainfall is a strong predictor of roof shape, controlling for language family and region. Flat roofs are unlikely to occur in locales with a lot of precipitation. So the hypothesis is supported: rainfall selects against flat roots.
+
+## References
+
+Botero, C. A., Gardner, B., Kirby, K. R., Bulbulia, J., Gavin, M. C., & Gray, R. D. (2014). The ecology of religious beliefs. Proceedings of the National Academy of Sciences, 111(47), 16784–16789. https://doi.org/10.1073/pnas.1408701111
