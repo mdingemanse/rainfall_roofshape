@@ -1,48 +1,45 @@
 ---
 title: "Rainfall and roof shape"
-author: "Mark Dingemanse (MPI for Psycholinguistics)"
 output:
-  html_document:
-    fig_height: 7
-    toc: yes
-    toc_float: yes
+  github_document: default
+  html_document: 
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    theme: united
+editor_options: 
+  chunk_output_type: console
 ---
 
-```{r}
-library(knitr)
-library(kableExtra)
-
-source('in/MuMAC.09Sep14.R')
-source('in/MuMAC.09Sep14_distance.R')
+```{r global_options, include=FALSE}
+#run the outcommented render command below to generate both .html and .md output, the latter of which will be rendered nicely on GitHub:
+#rmarkdown::render("analysis.Rmd", output_format = "all",encoding="UTF-8")
+knitr::opts_chunk$set(fig.path='figs/', echo=TRUE, warning=FALSE, message=FALSE)
 ```
 
-
-# Objectives
-
-1. Play with the new D-PLACE database 
-2. Test a hunch about the relation of roof shape to rainfall (briefly, lots of rain negatively selects against flat roofs). Somewhat trivial, but easy to check, lots of data, and fieldwork experience in Ghana provides relevant ethnographic and historical background (including a possible account for an apparent exception).
-3. Do this while controlling for language family (Galton's problem) and region (horizontal diffusion)
+## Intro
+This is a cross-cultural test of a hunch about the relation of roof shape to rainfall (briefly, lots of rain negatively selects against flat roofs). If correct, this is an example of culture-environment interactions. A possible counterexample in Ghana is of special interest, as it provides an opportunity to explore the relation between generalizations derived from large-scale cross-cultural datasets like D-PLACE and accounts grounded more directly in ethnographic fieldwork. 
 
 # Preliminaries
 Clear workspace, check for /in/ and /out/ directories (create them if needed), and load packages (install them if needed)
 
 ```{r preliminaries, results="hide"}
-add_working_dir <- function(x) { if(file.exists(x)) { cat(x,"dir:",paste0(getwd(),"/",x,"/")) } else { dir.create(paste0(getwd(),"/",x)) 
-  cat("subdirectory",x,"created in",getwd()) } }
-add_working_dir("in")
-add_working_dir("out")
 
-list.of.packages <- c("ggplot2","tidyr","dplyr","ggthemes","lme4","extremevalues","mapproj","sp","rgeos")
+list.of.packages <- c("tidyr","ggthemes","lme4","extremevalues","mapproj","sp","rgeos","knitr","kableExtra")
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)>0) install.packages(new.packages)
 lapply(list.of.packages, require, character.only=T)
 rm(list.of.packages,new.packages)
 
+# Botero 2014
+source('in/MuMAC.09Sep14.R')
+source('in/MuMAC.09Sep14_distance.R')
+
 ```
 
 # Hypothesis
 
-Main hunch: Roof type is related to precipitation such that round/sloping roofs more likely when there is much rain. Note the directionality: we expect few flat roofs in high rainfall societies, but we have no predictions for what happens in low rainfall societies. In causal terms, high rainfall selects *against* flat roofs, but low rainfall does not select *for* them.
+*Main hypothesis*: Roof type is related to precipitation such that round/sloping roofs more likely when there is much rain. Note the directionality: we expect few flat roofs in high rainfall societies, but we have no predictions for what happens in low rainfall societies. In causal terms, high rainfall selects *against* flat roofs, but low rainfall does not select *for* them.
 
 # Data
 
@@ -54,33 +51,29 @@ Load and pre-process D-PLACE data. Here's a [direct link](https://d-place.org/so
 ```{r data}
 # Load data (skipping line 1, which is a note about attribution)
 
-d <- read.csv(file="in/dplace-export.csv",skip=1, stringsAsFactors = FALSE)
+d <- read.csv(file="in/dplace-export.csv",skip=1, stringsAsFactors = FALSE) %>%
+  # rename unwieldy var names
+  dplyr::rename("roofdesc" = "Description..EA082.House.construction..shape.of.roof",
+                "roofcode" = "Code..EA082.House.construction..shape.of.roof",
+                "rainfall" = "Variable..Monthly.Mean.Precipitation..mm.",
+                "longitude" = "Revised.longitude",
+                "latitude" = "Revised.latitude",
+                "references" = "References..EA082.House.construction..shape.of.roof",
+                "region" = "Region.name") %>%
+  # create summary variable for flat vs non-flat roofs
+  mutate(flatroof = as.factor(ifelse(d$roofcode == 7,1,0)))
 
-# Rename unwieldy variable names
-names(d)[names(d)=="Description..EA082.House.construction..shape.of.roof"] <- "roofdesc"
-names(d)[names(d)=="Code..EA082.House.construction..shape.of.roof"] <- "roofcode"
-names(d)[names(d)=="Variable..Monthly.Mean.Precipitation..mm."] <- "rainfall"
-names(d)[names(d)=="Code..EA087.House.construction..secondary.house.type...shape.of.roof"] <- "roofcode.secondary"
-names(d)[names(d)=="Revised.longitude"] <- "longitude"
-names(d)[names(d)=="Revised.latitude"] <- "latitude"
-names(d)[names(d)=="References..EA082.House.construction..shape.of.roof"] <- "references"
-names(d)[names(d)=="Region.name"] <- "region"
-
-# What's the mapping exactly?
-code <- unique(d$roofcode)
-desc <- unique(d$roofdesc)
-roofs <- data.frame(code,desc)
-
-# make summary variable flatroof, 1 for flat, 0 for non-flat
-# we have only 95 societies with flat roofs and 1035 with non-flat
-d$flatroof <- ifelse(d$roofcode == 7,1,0) # i.e. flatroof = 1 if roofcode 7, 0 otherwise
-d$flatroof <- as.factor(d$flatroof)
-xtabs(~ flatroof,data=d)
+# as a sanity check, have a look at the roofcodes to see we're right in keeping 7 vs rest
+# looks like we have only 95 societies with flat roofs and 1035 with non-flat
+d %>%
+  select(roofcode,roofdesc) %>%
+  group_by(roofcode) %>%
+  count(roofcode,roofdesc)
 ```
-(There is also a bit of data for roof shape of secondary buildings, but it only covers 30% of the dataset and the biases hypothesised here are more important for main dwellings so we won't use it here.)
+(There is also a bit of data for roof shape of secondary buildings under code EA087, but it only covers 30% of the dataset and the biases hypothesised here are more important for main dwellings so we won't use it here.)
 
 # First exploration
-So now: how does roof flatness relate to precipitation? Comparing means, we see that the average monthly rainfall for flat roof societies is 48.1 (582 annually), while for non-flat roof societies it is twice as high at 105.8 (1270 annually). To put this in context, average annual rainfall over land on earth is 59.5 monthly (715 annually). 
+So now: how does roof flatness relate to precipitation? Comparing means, we see that the average monthly rainfall for flat roof societies is 48.1 (582 annually), while for non-flat roof societies it is twice as high at 105.8 (1270 annually). To put this in context, average annual rainfall over land on earth is 59.5 monthly (715 annually) — so the mean for flat roofs seems lower and for non-flat roofs quite a bit higher. 
 
 ```{r}
 d %>%
@@ -92,8 +85,8 @@ d %>%
 What are the extreme values? `getOutliers()` computes extreme values against a baseline expectation of a normal distribution
 
 ```{r}
-d.outliers <- getOutliers(d$rainfall)
-outlierPlot(d$rainfall, d.outliers, title="Rainfall — QQ plot with outliers\nnormal distribution, R2 = 0.9764") 
+outlierPlot(d$rainfall, getOutliers(d$rainfall), title="Rainfall — QQ plot with outliers\nnormal distribution, R2 = 0.9764") 
+
 ```
 
 This QQ plot based on a normal distribution doesn't look optimal: two extreme values are classified as outliers, together with the tail end of what looks like a continuous distribution. Can we do better?
@@ -101,45 +94,25 @@ This QQ plot based on a normal distribution doesn't look optimal: two extreme va
 Well, precipitation is probably better modelled using a Weibull distribution: after all, 0 is a hard minimum whereas there is more room for variation on the other end (cf. Wilks 1989). Whoah, that's a pretty tight fit — R² = 0.9988!
 
 ```{r}
-d.outliers.weibull <- getOutliers(d$rainfall,distribution="weibull")
-outlierPlot(d$rainfall, d.outliers.weibull, title="Rainfall — QQ plot with outliers\nWeibull distribution, R² = 0.9988") 
+outlierPlot(d$rainfall, getOutliers(d$rainfall,distribution="weibull"), title="Rainfall — QQ plot with outliers\nWeibull distribution, R² = 0.9988") 
 ```
 
-Side note: we can also plot this in ggplot2 of course — though I'm not sure how to compute the dparams for qweibull so I've just taken them from `d.outliers.weibull`
-
+So what are those extreme values? They have exactly the same rainfall and seem to be very close together: Saipan Island in the NW Pacific.
 ```{r}
-ggplot(d,aes(sample=rainfall)) +
-  stat_qq(distribution=qweibull,dparams = list(shape=1.42, scale=110))
-
-# One nice thing about ggplot is that it's trivial to group by flatroof (0/1), which already suggests different distributions
-
-ggplot(d,aes(sample=rainfall,colour=flatroof)) +
-  stat_qq(distribution=qweibull,dparams = list(shape=1.8, scale=130))
+d[c(getOutliers(d$rainfall,distribution="weibull")$iRight),c("Preferred.society.name","region","rainfall","latitude","longitude")]
 ```
 
-So what are the most extreme values? They have exactly the same rainfall and seem to be very close together: Saipan Island in the NW Pacific.
-```{r}
-d.outliers.weibull$nOut # both are on the right
-d[c(d.outliers.weibull$iRight),c("Preferred.society.name","region","rainfall","latitude","longitude")]
-```
-
-Monthly rainfall for both is recorded as 547.9482, probably taken or interpolated from the same weather station(s). The lat/long places both on Saipan Island. Annual rainfall there is highly variable, but ranges from 1900mm to 2300mm, i.e. 158-192 monthly, according to a 2004 report [1]. That is still roughly twice as high as the median, but at least it's not six times as high. It is hard to find sources with historical precipitation data for the focal years of the Ethnographic Atlas (1930-1950), but I consider this enough reason to treat these data points as quirks to be excluded.
+Monthly rainfall for both is recorded as 547.9482, probably taken or interpolated from the same weather station(s). The lat/long places both on Saipan Island. Annual rainfall there is highly variable, but ranges from 1900mm to 2300mm, i.e. 158-192 monthly, according to a 2004 report [1] — three times lower than the 548 monthly from this estimate. It is hard to find sources with historical precipitation data for the focal years of the Ethnographic Atlas (1930-1950), but I consider this enough reason to treat these data points as quirks to be excluded.
 
 [1] http://www.weriguam.org/reports/item/rainfall-climatology-for-saipan-distribution-return-periods-el-nino-tropical-cyclones-and-long-term-variations.html
 
-We create a copy of the data that excludes these extreme outliers and do the Weibull plot again as a sanity check.
+Though we'll see below that the result don't change whether these two outliers are included or not, we'll work with a copy of the data that does excude them, mostly because otherwise the colour scales of the plots are off.
 
 ```{r}
-d.no <- d[-d.outliers.weibull$iRight,] 
+d.no <- d[-getOutliers(d$rainfall,distribution="weibull")$iRight,] %>%
+  group_by(flatroof) 
+d.no %>% summarise(count=n(),mean=mean(rainfall))
 
-d.no.outliers <- getOutliers(d.no$rainfall,distribution="weibull")
-d.no.outliers$nOut # now there are no outliers anymore
-outlierPlot(d.no$rainfall, d.no.outliers,title="Rainfall: QQ plot with outliers\nWeibull distribution, R² = 0.9989") 
-
-d.no %>%
-  group_by(flatroof) %>%
-  summarise(count=n(),mean=mean(rainfall))
-t.test(d.no[which(d.no$flatroof==0),"rainfall"],d.no[which(d.no$flatroof==1),"rainfall"])
 ```
 
 So what are the 3 societies with the highest rainfall in the flat roof category?
@@ -206,13 +179,27 @@ zoom1 <- last_plot() + borders(colour="white") + coord_map(xlim = c(-18,7), ylim
 
 zoom1 + geom_point(data=top3,aes(longitude,latitude),fill="red",colour="red",size=3,shape=22,stroke=1)
 ggsave(file="out/map-rainfall-by-rooftype-west-africa.png", width=12,height=8)
+
+# quick look at duplicates due to D-PLACE lat/long binning
+d <- d %>% 
+  mutate(latlong = paste0("Lo",longitude,"La",latitude),
+         dup = duplicated(latlong))
+duplatlongs <- subset(d,dup==T)$latlong
+
+# looks like 240 societies have non-unique lat/long values
+d %>%
+  filter(latlong %in% duplatlongs) %>%
+  arrange(latlong) %>%
+  group_by(latlong) %>%
+  select(Preferred.society.name,latitude,longitude) %>%
+  View()
+
 ```
 
-# Statistical modelling
+# Stats
 So the difference in means and in distributions is suggestive. But not all observations are independent. For one thing, some languages are from the same language family and so may have inherited cultural features from a common ancestor. We use generalised linear mixed effects modelling to control for this. We add language family as a random intercept (meaning we allow the value of roof to be 'dependent' to some degree on language family). 
 
-We create two models: one in which we try to predict flatroof by language family alone, another where add rainfall as a fixed effect. The second one is what we're primarily interested in. Comparing them, the one including rainfall as a fixed effect, in 
-# addition to language family, explains the spread of data significantly better (χ2(1) = 51.331, p < 0.00001, log likelihood difference 25.67).
+We create two models: one in which we try to predict flatroof by language family alone, another where we add rainfall as a fixed effect. The second one is what we're primarily interested in. Comparing them, the one including rainfall as a fixed effect, in addition to language family, explains the spread of data significantly better (χ2(1) = 51.331, p < 0.00001, log likelihood difference 25.67).
 
 
 ```{r}
@@ -224,7 +211,7 @@ summary(model2)
 comparison <- anova(model1, model2)
 comparison[1,4]-comparison[2,4] # log likelihood difference
 ```
-But the maps show that some of the flat roofs appear in 'clumps'. Perhaps horizontal diffusion due to cultural contact can explain part of it. Best way to check this would be to compute distance to nearest flatroof neighbour (relevant code here: https://is.gd/FFLbKH), but the coordinate data in D-PLACE is rounded which makes that measure uninformative in regions with many societies. So let's use region as a proxy. The reasoning is: if you're in the same region, chances are you have the same kind of roof, whatever it is (i.e. a random intercept). 
+But the maps show that some of the flat roofs appear in 'clumps'. Perhaps horizontal diffusion due to cultural contact can explain part of it. Best way to check this would be to compute distance to nearest flatroof neighbour, but the coordinate data in D-PLACE is rounded which makes that measure uninformative in regions with many societies. So let's use region as a proxy. The reasoning is: if you're in the same region, chances are you have the same kind of roof, whatever it is (i.e. a random intercept). 
 
 We compare model 2 with this new model. The new model, which includes region besides language family, explains the spread of data significantly better (χ2(1) = 56.262, p < 0.00001, log likelihood difference 28.13).
 
@@ -258,7 +245,7 @@ comparison[1,4]-comparison[2,4] # log likelihood difference
 
 # Botero (2014) Nearest-neighbour approach
 
-Here is an approach implmented first in 'The ecology of religious beliefs' by Carlos Botero and colleagues. This approach includes language family as a random effect (as in the model above) and estimates the effect of spatial proximity by using the average response value of N nearest neighbours as a predictor variable. The logic being if something is transmitted horizontally, neighbours have similar trait values and this will predict a particular societies value. 
+Here is an approach implemented first in 'The ecology of religious beliefs' by Carlos Botero and colleagues. This approach includes language family as a random effect (as in the model above) and estimates the effect of spatial proximity by using the average response value of N nearest neighbours as a predictor variable. The logic being if something is transmitted horizontally, neighbours have similar trait values and this will predict a particular societies value. 
 
 First, we will look at the NN approach - however, since we are using a global sample, neighbours are not always of the same distance, meaning the definition of horiztonal influence varies (e.g. Rapanui's nearest 5 neighbours will be very different to a PNG society). So, secondly we alter this approach to take the nearest neighbours within a certain distance. This approach will be called closest neighbours. 
 
